@@ -41,6 +41,7 @@ backend/.env
 # Project specific
 backend/extracted_texts/
 backend/debug_embed.py
+backend/data/
 
 # OS
 .DS_Store

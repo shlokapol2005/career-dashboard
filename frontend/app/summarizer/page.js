@@ -52,7 +52,7 @@ export default function SummarizerPage() {
         formData.append('files', file);
       });
       
-      const response = await fetch('http://localhost:5000/api/summarize', {
+      const response = await fetch('http://localhost:5001/api/summarize', {
         method: 'POST',
         body: formData,
       });

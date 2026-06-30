@@ -1,7 +1,8 @@
 import os
 import faiss
 import numpy as np
-import PyPDF2
+import fitz
+from PIL import Image
 from pptx import Presentation
 from io import BytesIO
 from google import genai
@@ -36,6 +37,7 @@ class RAGEngine:
         self.index = None
         self.chunks: list[str] = []
         self.raw_text = ""
+        self.extracted_images = []
 
     # ── Step 1: Extract raw text ──────────────
     def extract_text(self, file_bytes: bytes, filename: str, content_type: str) -> str:
@@ -43,11 +45,21 @@ class RAGEngine:
         filename_lower = filename.lower()
         try:
             if "pdf" in content_type or filename_lower.endswith(".pdf"):
-                reader = PyPDF2.PdfReader(BytesIO(file_bytes))
-                for page in reader.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
+                doc = fitz.open(stream=file_bytes, filetype="pdf")
+                for page in doc:
+                    text += page.get_text() + "\n"
+                    # Extract images
+                    for img in page.get_images(full=True):
+                        xref = img[0]
+                        base_image = doc.extract_image(xref)
+                        image_bytes = base_image["image"]
+                        try:
+                            pil_img = Image.open(BytesIO(image_bytes))
+                            if pil_img.mode not in ('RGB', 'L'):
+                                pil_img = pil_img.convert('RGB')
+                            self.extracted_images.append(pil_img)
+                        except Exception:
+                            pass
 
             elif "presentation" in content_type or filename_lower.endswith(".pptx"):
                 prs = Presentation(BytesIO(file_bytes))
@@ -98,10 +110,14 @@ Respond ONLY with a valid JSON object in exactly this format (no markdown, no ex
   ]
 }}
 """
+        payload = [prompt]
+        if hasattr(self, "extracted_images") and self.extracted_images:
+            payload.extend(self.extracted_images[:15])
+
         try:
             result = self.client.models.generate_content(
                 model=self.GENERATION_MODEL,
-                contents=prompt,
+                contents=payload,
             )
             text_out = result.text.strip()
         except Exception as e:
@@ -213,3 +229,68 @@ Tutor:
             return result.text.strip()
         except Exception as e:
             return f"Error generating answer: {str(e)}"
+
+    # ── Step 5: Quiz Generation ────────────────
+    def generate_quiz(self, difficulty: str) -> str:
+        """Generate a quiz (Medium/Advanced) based on the extracted notes."""
+        if not self.raw_text:
+            raise ValueError("No text available to generate a quiz. Please upload notes first.")
+
+        context = self.raw_text[:600000]
+        
+        prompt = f"""
+You are an expert AI tutor. Based on the student's study notes provided below, generate a {difficulty.upper()} difficulty quiz.
+The quiz should test their understanding of the core concepts in the notes.
+You MUST include EXACTLY 10 questions: 8 Multiple Choice Questions (MCQs) and 2 Subjective (or Coding, if applicable) questions.
+If images are provided, use the visual information in them to formulate relevant questions.
+
+Notes:
+---
+{context}
+---
+
+Respond ONLY with a valid JSON object in exactly this format (no markdown, no extra text):
+{{
+  "difficulty": "{difficulty}",
+  "topic": "Broad topic name of the notes (e.g. Cryptography, Operating Systems, Machine Learning)",
+  "questions": [
+    {{
+      "type": "mcq",
+      "skill": "Name of the specific skill or concept tested",
+      "question": "The question text",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "answer": "The correct option text exactly as it appears in the options array",
+      "explanation": "Brief explanation of why this is correct."
+    }},
+    {{
+      "type": "subjective",
+      "skill": "Name of the specific skill or concept tested",
+      "question": "The subjective or coding question text",
+      "answer": "A model answer or key points expected in the answer.",
+      "explanation": "Explanation or grading rubric."
+    }}
+  ]
+}}
+"""
+        payload = [prompt]
+        if hasattr(self, "extracted_images") and self.extracted_images:
+            payload.extend(self.extracted_images[:15])
+
+        try:
+            result = self.client.models.generate_content(
+                model=self.GENERATION_MODEL,
+                contents=payload,
+            )
+            text_out = result.text.strip()
+        except Exception as e:
+            raise ValueError(f"Gemini generation failed: {e}")
+
+        # Strip markdown fences if present
+        if text_out.startswith("```json"):
+            text_out = text_out[7:]
+        elif text_out.startswith("```"):
+            text_out = text_out[3:]
+        if text_out.endswith("```"):
+            text_out = text_out[:-3]
+
+        return text_out.strip()

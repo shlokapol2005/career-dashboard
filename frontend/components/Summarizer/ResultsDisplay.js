@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
-import { BookOpen, Lightbulb, ListChecks, ChevronRight } from 'lucide-react';
+import { BookOpen, Lightbulb, ListChecks, ChevronRight, Brain } from 'lucide-react';
+import QuizManager from '../Quiz/QuizManager';
 
 export default function ResultsDisplay({ data, onReset }) {
   const [activeTab, setActiveTab] = useState('summary');
@@ -31,6 +32,13 @@ export default function ResultsDisplay({ data, onReset }) {
           >
             <ListChecks size={18} />
             Revision Notes
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'quiz' ? 'active' : ''}`}
+            onClick={() => setActiveTab('quiz')}
+          >
+            <Brain size={18} />
+            Take Quiz
           </button>
         </div>
       </div>
@@ -75,6 +83,12 @@ export default function ResultsDisplay({ data, onReset }) {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {activeTab === 'quiz' && (
+          <div className="tab-pane animate-fade-in">
+            <QuizManager />
           </div>
         )}
       </div>

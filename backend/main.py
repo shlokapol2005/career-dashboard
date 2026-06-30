@@ -37,6 +37,24 @@ class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
 
+class QuizRequest(BaseModel):
+    difficulty: str
+
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+class SkillUpdateRequest(BaseModel):
+    username: str
+    topic: str
+    skills: List[str]
+
+USERS_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "users.json")
+os.makedirs(os.path.dirname(USERS_DB_PATH), exist_ok=True)
+if not os.path.exists(USERS_DB_PATH):
+    with open(USERS_DB_PATH, "w") as f:
+        json.dump({}, f)
+
 @app.post("/api/summarize")
 async def summarize_document(files: List[UploadFile] = File(...)):
     global active_engine
@@ -93,7 +111,7 @@ async def summarize_document(files: List[UploadFile] = File(...)):
         active_engine = engine
         
         try:
-            return json.loads(json_string)
+            return json.loads(json_string, strict=False)
         except json.JSONDecodeError:
             print("Failed to parse JSON:", json_string)
             raise HTTPException(status_code=500, detail="AI response was not valid JSON.")
@@ -117,6 +135,104 @@ async def chat_with_notes(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
+@app.post("/api/quiz/generate")
+async def generate_quiz(request: QuizRequest):
+    global active_engine
+    if not active_engine:
+        raise HTTPException(status_code=400, detail="No active document found. Please upload a document first.")
+    
+    try:
+        quiz_json = active_engine.generate_quiz(request.difficulty)
+        return json.loads(quiz_json, strict=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Quiz generation error: {str(e)}")
+
+@app.post("/api/auth/signup")
+async def signup(request: AuthRequest):
+    try:
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+        
+        if request.username in users:
+            raise HTTPException(status_code=400, detail="Username already exists")
+            
+        users[request.username] = {
+            "password": request.password,
+            "skills": {}
+        }
+        
+        with open(USERS_DB_PATH, "w") as f:
+            json.dump(users, f)
+            
+        return {"status": "success", "username": request.username}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Signup error: {str(e)}")
+
+@app.post("/api/auth/login")
+async def login(request: AuthRequest):
+    try:
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+            
+        if request.username not in users or users[request.username]["password"] != request.password:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+            
+        return {"status": "success", "username": request.username}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
+
+@app.get("/api/skills")
+async def get_skills(username: str):
+    try:
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+            
+        if username not in users:
+            return {"skills": {}}
+            
+        current_skills = users[username].get("skills", {})
+        if isinstance(current_skills, list):
+            current_skills = {"General": current_skills}
+            
+        return {"skills": current_skills}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading skills: {str(e)}")
+
+@app.post("/api/skills/update")
+async def update_skills(request: SkillUpdateRequest):
+    try:
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+            
+        if request.username not in users:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_data = users[request.username]
+        current_skills = user_data.get("skills", {})
+        if isinstance(current_skills, list):
+            current_skills = {"General": current_skills}
+            
+        topic_skills = set(current_skills.get(request.topic, []))
+        
+        for skill in request.skills:
+            topic_skills.add(skill)
+            
+        current_skills[request.topic] = list(topic_skills)
+        user_data["skills"] = current_skills
+        users[request.username] = user_data
+        
+        with open(USERS_DB_PATH, "w") as f:
+            json.dump(users, f)
+            
+        return {"status": "success", "skills": new_skills}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating skills: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5001)
