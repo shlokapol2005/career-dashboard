@@ -1,0 +1,169 @@
+:root {
+  --bg-main: #0b0f19; /* Deep dark blue-grey */
+  --bg-card: rgba(17, 24, 39, 0.7); /* Dark grey glass */
+  --bg-hover: rgba(31, 41, 55, 0.8);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: #f3f4f6; /* Off-white */
+  --text-secondary: #9ca3af; /* Cool grey */
+  --accent-color: #8b5cf6; /* Vibrant violet */
+  --accent-gradient: linear-gradient(135deg, #8b5cf6, #ec4899); /* Violet to Pink */
+  --success-color: #10b981;
+  --glass-blur: blur(20px);
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.10);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Black and White (High Contrast Monochrome) Theme */
+.theme-mono {
+  --bg-main: #000000;
+  --bg-card: rgba(0, 0, 0, 0.85);
+  --bg-hover: #1a1a1a;
+  --border-color: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --accent-color: #ffffff;
+  --accent-gradient: linear-gradient(135deg, #ffffff, #888888);
+  --success-color: #ffffff;
+  --glass-blur: blur(0px);
+  --shadow-sm: 0 0 0 1px #ffffff;
+  --shadow-md: 0 0 0 2px #ffffff;
+  --shadow-lg: 0 0 0 3px #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Clean up gradients for B&W theme */
+.theme-mono body {
+  background-image: none;
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-smooth);
+}
+
+.glass-panel:hover {
+  box-shadow: var(--shadow-md);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.theme-mono .glass-panel:hover {
+  border-color: var(--border-color);
+}
+
+/* Base button styles */
+.btn-primary {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 16px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.25);
+}
+
+.theme-mono .btn-primary {
+  color: #000000;
+  background: #ffffff;
+  box-shadow: none;
+  border: 1px solid #ffffff;
+}
+
+.theme-mono .btn-primary:hover:not(:disabled) {
+  background: #000000;
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px 24px;
+  border-radius: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.btn-outline:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-color);
+}
+
+/* Layout */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 3rem 2rem 6rem 2rem;
+  width: 100%;
+}
+
+.text-gradient {
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
