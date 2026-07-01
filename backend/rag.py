@@ -294,3 +294,82 @@ Respond ONLY with a valid JSON object in exactly this format (no markdown, no ex
             text_out = text_out[:-3]
 
         return text_out.strip()
+
+    # ── Step 6: Career Analysis (Resume → Skills + Projects) ──
+    def analyze_career(self, resume_text: str, desired_role: str) -> str:
+        """Analyze a resume against a desired role.
+        Returns JSON with currentSkills, skillsToLearn, and categorized projects."""
+
+        context = resume_text[:400000]
+
+        prompt = f"""
+You are an expert career coach and technical hiring manager. A candidate has uploaded their resume and wants to become a "{desired_role}".
+
+Your task:
+1. Extract every technical and professional skill already present in the resume.
+2. Identify the skills that a strong "{desired_role}" must have that are NOT currently on this resume.
+3. Suggest 9 hands-on projects (3 beginner, 3 intermediate, 3 advanced) that will help build the missing skills and significantly strengthen the resume for this role.
+
+Resume:
+---
+{context}
+---
+
+Respond ONLY with a valid JSON object in exactly this format (no markdown, no extra text):
+{{
+  "desiredRole": "{desired_role}",
+  "currentSkills": [
+    "Skill already on resume"
+  ],
+  "skillsToLearn": [
+    "Missing skill needed for the role"
+  ],
+  "projects": [
+    {{
+      "level": "beginner",
+      "title": "Project title",
+      "description": "What the project does and why it's relevant to the role.",
+      "skillsBuilt": ["Skill 1", "Skill 2"],
+      "howToBuild": "A concise, practical suggestion on how to approach building this project — key steps, tools, or resources to use.",
+      "githubRepo": "https://github.com/owner/repo — a real, well-known GitHub repository that the user can study as a reference implementation or starting point for this project. Only include repos you are highly confident exist."
+    }},
+    {{
+      "level": "intermediate",
+      "title": "Project title",
+      "description": "What the project does and why it's relevant to the role.",
+      "skillsBuilt": ["Skill 1", "Skill 2"],
+      "howToBuild": "A concise, practical suggestion on how to approach building this project — key steps, tools, or resources to use.",
+      "githubRepo": "https://github.com/owner/repo — a real, well-known GitHub repository that the user can study as a reference implementation or starting point for this project. Only include repos you are highly confident exist."
+    }},
+    {{
+      "level": "advanced",
+      "title": "Project title",
+      "description": "What the project does and why it's relevant to the role.",
+      "skillsBuilt": ["Skill 1", "Skill 2"],
+      "howToBuild": "A concise, practical suggestion on how to approach building this project — key steps, tools, or resources to use.",
+      "githubRepo": "https://github.com/owner/repo — a real, well-known GitHub repository that the user can study as a reference implementation or starting point for this project. Only include repos you are highly confident exist."
+    }}
+  ]
+}}
+
+Include exactly 3 beginner, 3 intermediate, and 3 advanced projects in the projects array.
+For githubRepo, provide ONLY the URL (starting with https://github.com/) with no extra text or description after it.
+"""
+        try:
+            result = self.client.models.generate_content(
+                model=self.GENERATION_MODEL,
+                contents=prompt,
+            )
+            text_out = result.text.strip()
+        except Exception as e:
+            raise ValueError(f"Gemini career analysis failed: {e}")
+
+        # Strip markdown fences if present
+        if text_out.startswith("```json"):
+            text_out = text_out[7:]
+        elif text_out.startswith("```"):
+            text_out = text_out[3:]
+        if text_out.endswith("```"):
+            text_out = text_out[:-3]
+
+        return text_out.strip()

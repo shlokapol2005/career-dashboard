@@ -60,17 +60,17 @@ export default function MainDashboard() {
               </div>
             </Link>
 
-            {/* Coming Soon Features */}
-            <div className="module-card glass-panel locked">
-              <div className="icon-wrapper bg-gray">
+            {/* Career Intelligence - Now Live */}
+            <Link href="/career" className="module-card glass-panel available">
+              <div className="icon-wrapper bg-orange">
                 <Target size={32} />
               </div>
               <div className="module-content">
                 <h3>Career Intelligence</h3>
-                <p>Analyze your readiness for your dream role and get a custom learning timeline.</p>
-                <span className="status-badge upcoming">Coming Soon</span>
+                <p>Upload your resume and get a personalized skill gap analysis with projects to build for your dream role.</p>
+                <span className="status-badge live">Live Now</span>
               </div>
-            </div>
+            </Link>
 
             <div className="module-card glass-panel locked">
               <div className="icon-wrapper bg-gray">
@@ -302,6 +302,7 @@ export default function MainDashboard() {
         }
         
         .bg-teal { background: var(--accent-gradient); }
+        .bg-orange { background: linear-gradient(135deg, #f59e0b, #f97316); }
         .bg-gray { background: #94a3b8; }
 
         .module-content h3 {

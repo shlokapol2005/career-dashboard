@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -201,6 +201,42 @@ async def get_skills(username: str):
         return {"skills": current_skills}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading skills: {str(e)}")
+
+@app.post("/api/career/analyze")
+async def career_analyze(
+    resume: UploadFile = File(...),
+    desired_role: str = Form(...),
+):
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "your_api_key_here":
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
+
+    try:
+        engine = RAGEngine(api_key=api_key)
+        content = await resume.read()
+        text = engine.extract_text(content, resume.filename, resume.content_type)
+
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from the resume. Please ensure it is not a scanned image."
+            )
+
+        json_string = engine.analyze_career(text, desired_role)
+
+        try:
+            return json.loads(json_string, strict=False)
+        except json.JSONDecodeError:
+            print("Failed to parse career JSON:", json_string)
+            raise HTTPException(status_code=500, detail="AI response was not valid JSON.")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Career analysis error: {str(e)}")
+
 
 @app.post("/api/skills/update")
 async def update_skills(request: SkillUpdateRequest):
