@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, Target, LayoutDashboard, BrainCircuit, Users, Award, LogOut, ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import { BookOpen, Target, LayoutDashboard, BrainCircuit, Users, Award, LogOut, ChevronDown, ChevronRight, FolderTree, TrendingUp } from 'lucide-react';
 
 export default function MainDashboard() {
   const [skills, setSkills] = useState({});
@@ -72,16 +72,16 @@ export default function MainDashboard() {
               </div>
             </Link>
 
-            <div className="module-card glass-panel locked">
-              <div className="icon-wrapper bg-gray">
-                <LayoutDashboard size={32} />
+            <Link href="/knowledge-gap" className="module-card glass-panel available">
+              <div className="icon-wrapper bg-indigo">
+                <TrendingUp size={32} />
               </div>
               <div className="module-content">
-                <h3>Concept Graph</h3>
-                <p>Visualize your knowledge dependencies and find the root cause of weak topics.</p>
-                <span className="status-badge upcoming">Phase 3</span>
+                <h3>Knowledge Gap Analysis</h3>
+                <p>Upload your resume and get a precise readiness score, missing skills, courses, and a personalised learning roadmap.</p>
+                <span className="status-badge live">Live Now</span>
               </div>
-            </div>
+            </Link>
 
             <div className="module-card glass-panel locked">
               <div className="icon-wrapper bg-gray">
@@ -106,8 +106,8 @@ export default function MainDashboard() {
               <div className="skills-accordion">
                 {Object.entries(skills).map(([topic, subtopics], idx) => (
                   <div key={idx} className="topic-group">
-                    <button 
-                      className="accordion-header" 
+                    <button
+                      className="accordion-header"
                       onClick={() => toggleTopic(topic)}
                     >
                       <div className="topic-title">
@@ -303,6 +303,7 @@ export default function MainDashboard() {
         
         .bg-teal { background: var(--accent-gradient); }
         .bg-orange { background: linear-gradient(135deg, #f59e0b, #f97316); }
+        .bg-indigo { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
         .bg-gray { background: #94a3b8; }
 
         .module-content h3 {

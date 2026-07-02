@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import os
 import json
 
@@ -14,6 +14,7 @@ if os.path.exists(env_path):
                 os.environ[key] = value
 
 from rag import RAGEngine
+from knowledge_gap_service import KnowledgeGapService, KnowledgeGapRequest
 
 app = FastAPI(title="AI Learning Engine API")
 
@@ -28,6 +29,21 @@ app.add_middleware(
 
 # Global RAG engine instance to persist the active document's vector index
 active_engine = None
+
+# Knowledge Gap Service — lazy singleton
+_kg_service: Optional[KnowledgeGapService] = None
+
+def get_kg_service() -> KnowledgeGapService:
+    global _kg_service
+    if _kg_service is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key and api_key != "your_api_key_here":
+            from google import genai
+            client = genai.Client(api_key=api_key, http_options={"api_version": "v1beta"})
+            _kg_service = KnowledgeGapService(gemini_client=client)
+        else:
+            _kg_service = KnowledgeGapService(gemini_client=None)
+    return _kg_service
 
 class ChatMessage(BaseModel):
     role: str
@@ -263,11 +279,83 @@ async def update_skills(request: SkillUpdateRequest):
         with open(USERS_DB_PATH, "w") as f:
             json.dump(users, f)
             
-        return {"status": "success", "skills": new_skills}
+        return {"status": "success", "skills": current_skills}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating skills: {str(e)}")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Knowledge Gap & Career Readiness Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/career/readiness")
+async def analyze_knowledge_gap(request: KnowledgeGapRequest):
+    """
+    POST /api/career/readiness
+    Accepts skills extracted from resume + career goal.
+    Returns readiness score, strong/missing skills, courses, certs, roadmap.
+    Persists result to users.json under career_readiness key.
+    """
+    try:
+        service = get_kg_service()
+        response = service.analyze(request)
+        result = response.model_dump()
+
+        # Persist to users.json
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+
+        if request.username not in users:
+            raise HTTPException(status_code=404, detail="User not found. Please log in first.")
+
+        users[request.username]["career_readiness"] = {
+            "career_goal": request.career_goal,
+            "target_company": request.target_company,
+            "current_skills": request.current_skills,
+            "analysis": result
+        }
+
+        with open(USERS_DB_PATH, "w") as f:
+            json.dump(users, f, indent=2)
+
+        return {"status": "success", **result}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Knowledge gap analysis error: {str(e)}")
+
+
+@app.get("/api/career/readiness")
+async def get_knowledge_gap(username: str):
+    """
+    GET /api/career/readiness?username=<username>
+    Returns the user's last saved career readiness analysis.
+    """
+    try:
+        with open(USERS_DB_PATH, "r") as f:
+            users = json.load(f)
+
+        if username not in users:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        saved = users[username].get("career_readiness")
+        if not saved:
+            raise HTTPException(
+                status_code=404,
+                detail="No career readiness analysis found. Run an analysis first."
+            )
+
+        return {"status": "success", "data": saved}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching readiness data: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
