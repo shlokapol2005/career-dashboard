@@ -55,6 +55,13 @@ class ChatRequest(BaseModel):
 
 class QuizRequest(BaseModel):
     difficulty: str
+    question_count: int = 10
+
+class HintRequest(BaseModel):
+    question: str
+    options: list
+    skill: str
+    difficulty: str
 
 class AuthRequest(BaseModel):
     username: str
@@ -158,10 +165,46 @@ async def generate_quiz(request: QuizRequest):
         raise HTTPException(status_code=400, detail="No active document found. Please upload a document first.")
     
     try:
-        quiz_json = active_engine.generate_quiz(request.difficulty)
+        quiz_json = active_engine.generate_quiz(request.difficulty, request.question_count)
         return json.loads(quiz_json, strict=False)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Quiz generation error: {str(e)}")
+
+@app.post("/api/quiz/hint")
+async def get_quiz_hint(request: HintRequest):
+    global active_engine
+    if not active_engine:
+        raise HTTPException(status_code=400, detail="No active document found. Please upload a document first.")
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "your_api_key_here":
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
+
+    options_text = "\n".join([f"  - {opt}" for opt in request.options])
+    prompt = f"""
+You are a helpful tutor for a student doing a {request.difficulty} level quiz about "{request.skill}".
+
+The student is stuck on this question:
+Question: {request.question}
+
+Options:
+{options_text}
+
+Give a SHORT, helpful HINT (2-3 sentences max) that guides the student toward the correct answer WITHOUT directly revealing it.
+Do NOT say which option is correct. Instead, point them to the underlying concept or give a memory tip.
+Be encouraging and educational."""
+
+    try:
+        from google import genai as genai_lib
+        client = genai_lib.Client(api_key=api_key, http_options={"api_version": "v1beta"})
+        result = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[prompt]
+        )
+        hint_text = result.text.strip()
+        return {"hint": hint_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hint generation error: {str(e)}")
 
 import sqlite3
 from database import get_db_connection, init_db

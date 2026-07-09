@@ -1,15 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import {
-  ArrowLeft, Sparkles, UploadCloud, FileText, Loader2,
+  Sparkles, UploadCloud, FileText, Loader2,
   AlertCircle, CheckCircle2, Target, Layers, Hammer,
   ChevronRight, Lightbulb, BookMarked, Rocket, Building2,
   TrendingUp, Brain, BookOpen, Award, Map, AlertTriangle,
   GraduationCap, Zap, Star, ExternalLink, RotateCcw
 } from 'lucide-react';
+import Navbar from '../../components/Navbar';
 
 // ── Level config for Projects tab ─────────────────────────────────────────────
 const LEVEL_CONFIG = {
@@ -145,13 +145,9 @@ export default function CareerPage() {
   ];
 
   return (
-    <main className="container animate-fade-in">
-      {/* Navbar */}
-      <nav className="career-nav">
-        <Link href="/" className="back-link">
-          <ArrowLeft size={16} /> Back to Dashboard
-        </Link>
-      </nav>
+    <div className="page-wrapper">
+      <Navbar />
+      <main className="container animate-fade-in">
 
       {/* Hero */}
       <header className="career-hero">
@@ -877,6 +873,7 @@ export default function CareerPage() {
           .tab-btn { padding: 8px 10px; font-size: .78rem; }
         }
       `}</style>
-    </main>
+      </main>
+    </div>
   );
 }

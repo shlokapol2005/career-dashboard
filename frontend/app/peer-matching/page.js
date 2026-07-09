@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import {
-  ArrowLeft, Users, Loader2, Target, Code, Search, 
+  Users, Loader2, Target, Code, Search, 
   CheckCircle2, Plus, ArrowRight, UserPlus, BrainCircuit,
   MessageSquare
 } from 'lucide-react';
+import Navbar from '../../components/Navbar';
 
 export default function PeerMatchingPage() {
   const { user, loading } = useAuth();
@@ -87,13 +87,9 @@ export default function PeerMatchingPage() {
   };
 
   return (
-    <main className="container animate-fade-in">
-      {/* Navbar */}
-      <nav className="pm-nav">
-        <Link href="/" className="back-link">
-          <ArrowLeft size={16} /> Back to Dashboard
-        </Link>
-      </nav>
+    <div className="page-wrapper">
+      <Navbar />
+      <main className="container animate-fade-in">
 
       {/* Hero */}
       <header className="pm-hero">
@@ -364,11 +360,13 @@ export default function PeerMatchingPage() {
         .btn-cancel { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; }
         .btn-cancel:hover { background: rgba(255,255,255,.05); }
 
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+        @media(max-width:640px) {
+          .pm-title { font-size: 2rem; }
         }
       `}</style>
     </main>
+    </div>
   );
 }

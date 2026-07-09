@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
   const login = (userData) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
-    router.push('/');
+    router.push('/dashboard');
   };
 
   const logout = () => {

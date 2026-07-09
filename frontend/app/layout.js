@@ -2,8 +2,8 @@ import './globals.css';
 import { AuthProvider } from '../context/AuthContext';
 
 export const metadata = {
-  title: 'AI Notes Summarizer | Career Dashboard',
-  description: 'Upload your notes and let AI summarize them, extract concepts, and generate revision points.',
+  title: 'NEXUS HQ | AI-Powered Career Learning Platform',
+  description: 'Upload notes, close skill gaps, analyze your resume, and find hackathon teammates — all powered by Gemini AI.',
 };
 
 export default function RootLayout({ children }) {

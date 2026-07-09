@@ -231,17 +231,21 @@ Tutor:
             return f"Error generating answer: {str(e)}"
 
     # ── Step 5: Quiz Generation ────────────────
-    def generate_quiz(self, difficulty: str) -> str:
+    def generate_quiz(self, difficulty: str, question_count: int = 10) -> str:
         """Generate a quiz (Medium/Advanced) based on the extracted notes."""
         if not self.raw_text:
             raise ValueError("No text available to generate a quiz. Please upload notes first.")
 
         context = self.raw_text[:600000]
-        
+
+        # Calculate split: ~80% MCQ, ~20% subjective
+        num_subjective = max(2, round(question_count * 0.2))
+        num_mcq = question_count - num_subjective
+
         prompt = f"""
 You are an expert AI tutor. Based on the student's study notes provided below, generate a {difficulty.upper()} difficulty quiz.
 The quiz should test their understanding of the core concepts in the notes.
-You MUST include EXACTLY 10 questions: 8 Multiple Choice Questions (MCQs) and 2 Subjective (or Coding, if applicable) questions.
+You MUST include EXACTLY {question_count} questions: {num_mcq} Multiple Choice Questions (MCQs) and {num_subjective} Subjective (or Coding, if applicable) questions.
 If images are provided, use the visual information in them to formulate relevant questions.
 
 Notes:
