@@ -28,6 +28,11 @@ class KnowledgeGapRequest(BaseModel):
     target_company: Optional[str] = Field(None, description="e.g. Google, Microsoft")
 
 
+class ResourceLink(BaseModel):
+    name: str
+    url: str
+
+
 class KnowledgeGapResponse(BaseModel):
     career_goal: str
     target_company: Optional[str]
@@ -35,8 +40,8 @@ class KnowledgeGapResponse(BaseModel):
     score_explanation: str
     strong_skills: List[str]
     missing_skills: List[str]
-    recommended_courses: List[str]
-    recommended_certifications: List[str]
+    recommended_courses: List[ResourceLink]
+    recommended_certifications: List[ResourceLink]
     learning_roadmap: List[str]
 
 
@@ -221,17 +226,17 @@ class SkillMatcher:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class RecommendationEngine:
-    STATIC_FALLBACKS: Dict[str, Dict[str, List[str]]] = {
+    STATIC_FALLBACKS: Dict[str, Dict] = {
         "ml": {
             "courses": [
-                "Machine Learning Specialization — Coursera (Stanford/DeepLearning.AI)",
-                "Deep Learning Specialization — Coursera (DeepLearning.AI)",
-                "Hands-On Machine Learning with Scikit-Learn and TensorFlow — O'Reilly"
+                {"name": "Machine Learning Specialization — Coursera (Stanford/DeepLearning.AI)", "url": "https://www.coursera.org/specializations/machine-learning-introduction"},
+                {"name": "Deep Learning Specialization — Coursera (DeepLearning.AI)", "url": "https://www.coursera.org/specializations/deep-learning"},
+                {"name": "Practical Deep Learning for Coders — fast.ai (Free)", "url": "https://course.fast.ai"},
             ],
             "certifications": [
-                "Google Professional Machine Learning Engineer",
-                "AWS Certified Machine Learning – Specialty",
-                "TensorFlow Developer Certificate"
+                {"name": "Google Professional Machine Learning Engineer", "url": "https://cloud.google.com/certification/machine-learning-engineer"},
+                {"name": "AWS Certified Machine Learning – Specialty", "url": "https://aws.amazon.com/certification/certified-machine-learning-specialty/"},
+                {"name": "TensorFlow Developer Certificate", "url": "https://www.tensorflow.org/certificate"},
             ],
             "roadmap": [
                 "1. Linear Algebra, Calculus & Probability fundamentals",
@@ -243,14 +248,14 @@ class RecommendationEngine:
         },
         "data engineer": {
             "courses": [
-                "Data Engineering Zoomcamp — DataTalks.Club (Free)",
-                "The Complete Hands-on Introduction to Apache Airflow — Udemy",
-                "Fundamentals of Data Engineering — O'Reilly"
+                {"name": "Data Engineering Zoomcamp — DataTalks.Club (Free)", "url": "https://github.com/DataTalksClub/data-engineering-zoomcamp"},
+                {"name": "The Complete Hands-on Introduction to Apache Airflow — Udemy", "url": "https://www.udemy.com/course/the-complete-hands-on-course-to-master-apache-airflow/"},
+                {"name": "Fundamentals of Data Engineering — O'Reilly", "url": "https://www.oreilly.com/library/view/fundamentals-of-data/9781098108298/"},
             ],
             "certifications": [
-                "Google Professional Data Engineer",
-                "AWS Certified Data Engineer – Associate",
-                "Databricks Certified Associate Developer for Apache Spark"
+                {"name": "Google Professional Data Engineer", "url": "https://cloud.google.com/certification/data-engineer"},
+                {"name": "AWS Certified Data Engineer – Associate", "url": "https://aws.amazon.com/certification/certified-data-engineer-associate/"},
+                {"name": "Databricks Certified Associate Developer for Apache Spark", "url": "https://www.databricks.com/learn/certification/apache-spark-developer-associate"},
             ],
             "roadmap": [
                 "1. SQL mastery and relational database design",
@@ -262,13 +267,13 @@ class RecommendationEngine:
         },
         "ai engineer": {
             "courses": [
-                "LangChain for LLM Application Development — DeepLearning.AI (Free)",
-                "Building Systems with ChatGPT API — DeepLearning.AI (Free)",
-                "Hugging Face NLP Course — Hugging Face (Free)"
+                {"name": "LangChain for LLM Application Development — DeepLearning.AI (Free)", "url": "https://www.deeplearning.ai/short-courses/langchain-for-llm-application-development/"},
+                {"name": "Building Systems with the ChatGPT API — DeepLearning.AI (Free)", "url": "https://www.deeplearning.ai/short-courses/building-systems-with-chatgpt/"},
+                {"name": "Hugging Face NLP Course — Hugging Face (Free)", "url": "https://huggingface.co/learn/nlp-course/chapter1/1"},
             ],
             "certifications": [
-                "Google Professional Machine Learning Engineer",
-                "AWS Certified Machine Learning – Specialty"
+                {"name": "Google Professional Machine Learning Engineer", "url": "https://cloud.google.com/certification/machine-learning-engineer"},
+                {"name": "AWS Certified Machine Learning – Specialty", "url": "https://aws.amazon.com/certification/certified-machine-learning-specialty/"},
             ],
             "roadmap": [
                 "1. Deep Learning & Transformer architecture fundamentals",
@@ -280,14 +285,14 @@ class RecommendationEngine:
         },
         "sde": {
             "courses": [
-                "Algorithms Specialization — Coursera (Stanford)",
-                "System Design Interview Course — Educative.io",
-                "Clean Code — Udemy (Robert Martin principles)"
+                {"name": "Algorithms Specialization — Coursera (Stanford)", "url": "https://www.coursera.org/specializations/algorithms"},
+                {"name": "System Design Interview Course — Educative.io", "url": "https://www.educative.io/courses/grokking-modern-system-design-interview-for-engineers-managers"},
+                {"name": "The Last Algorithms Course You'll Need — Frontend Masters", "url": "https://frontendmasters.com/courses/algorithms/"},
             ],
             "certifications": [
-                "Oracle Certified Professional: Java SE Developer",
-                "AWS Certified Developer – Associate",
-                "Google Associate Cloud Engineer"
+                {"name": "Oracle Certified Professional: Java SE Developer", "url": "https://education.oracle.com/oracle-certified-professional-java-se-17-developer/trackp_OCPJSE17"},
+                {"name": "AWS Certified Developer – Associate", "url": "https://aws.amazon.com/certification/certified-developer-associate/"},
+                {"name": "Google Associate Cloud Engineer", "url": "https://cloud.google.com/certification/cloud-engineer"},
             ],
             "roadmap": [
                 "1. Core DSA: Arrays, Trees, Graphs, DP — LeetCode 150",
@@ -299,14 +304,14 @@ class RecommendationEngine:
         },
         "devops": {
             "courses": [
-                "DevOps Bootcamp — Udemy (TechWorld with Nana)",
-                "Kubernetes for the Absolute Beginner — KodeKloud",
-                "HashiCorp Terraform Associate Prep — Udemy"
+                {"name": "DevOps Bootcamp — Udemy (TechWorld with Nana)", "url": "https://www.udemy.com/course/techworld-with-nana-devops-bootcamp/"},
+                {"name": "Kubernetes for the Absolute Beginner — KodeKloud", "url": "https://kodekloud.com/courses/kubernetes-for-the-absolute-beginners-hands-on/"},
+                {"name": "HashiCorp Terraform Associate Prep — Udemy", "url": "https://www.udemy.com/course/terraform-beginner-to-advanced/"},
             ],
             "certifications": [
-                "Certified Kubernetes Administrator (CKA)",
-                "AWS Certified DevOps Engineer – Professional",
-                "HashiCorp Certified: Terraform Associate"
+                {"name": "Certified Kubernetes Administrator (CKA)", "url": "https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/"},
+                {"name": "AWS Certified DevOps Engineer – Professional", "url": "https://aws.amazon.com/certification/certified-devops-engineer-professional/"},
+                {"name": "HashiCorp Certified: Terraform Associate", "url": "https://www.hashicorp.com/certification/terraform-associate"},
             ],
             "roadmap": [
                 "1. Linux fundamentals & shell scripting",
@@ -318,14 +323,14 @@ class RecommendationEngine:
         },
         "data scientist": {
             "courses": [
-                "IBM Data Science Professional Certificate — Coursera",
-                "Applied Data Science with Python — Coursera (University of Michigan)",
-                "Kaggle Learn — Free Python, ML, and SQL courses"
+                {"name": "IBM Data Science Professional Certificate — Coursera", "url": "https://www.coursera.org/professional-certificates/ibm-data-science"},
+                {"name": "Applied Data Science with Python — Coursera (University of Michigan)", "url": "https://www.coursera.org/specializations/data-science-python"},
+                {"name": "Kaggle Learn — Free Python, ML, and SQL courses", "url": "https://www.kaggle.com/learn"},
             ],
             "certifications": [
-                "IBM Data Science Professional Certificate",
-                "Google Professional Data Engineer",
-                "Databricks Certified Associate Developer"
+                {"name": "IBM Data Science Professional Certificate", "url": "https://www.coursera.org/professional-certificates/ibm-data-science"},
+                {"name": "Google Professional Data Engineer", "url": "https://cloud.google.com/certification/data-engineer"},
+                {"name": "Databricks Certified Associate Developer", "url": "https://www.databricks.com/learn/certification/apache-spark-developer-associate"},
             ],
             "roadmap": [
                 "1. Python for data analysis: NumPy, Pandas, Matplotlib",
@@ -345,7 +350,7 @@ class RecommendationEngine:
         career_goal: str,
         target_company: Optional[str],
         missing_skills: List[str]
-    ) -> Dict[str, List[str]]:
+    ) -> Dict:
         if self.client and missing_skills:
             try:
                 return self._query_gemini(career_goal, target_company, missing_skills)
@@ -358,7 +363,7 @@ class RecommendationEngine:
         career_goal: str,
         target_company: Optional[str],
         missing_skills: List[str]
-    ) -> Dict[str, List[str]]:
+    ) -> Dict:
         company_ctx = f" targeting {target_company}" if target_company else ""
         skills_ctx  = ", ".join(missing_skills[:10])
 
@@ -368,15 +373,20 @@ They are currently missing these skills: {skills_ctx}.
 
 Return ONLY a valid JSON object (no markdown, no code fences) with this exact structure:
 {{
-  "courses": ["Course Name — Platform (Provider)"],
-  "certifications": ["Certification Name"],
+  "courses": [
+    {{"name": "Course Name — Platform (Provider)", "url": "https://real-course-url.com"}}
+  ],
+  "certifications": [
+    {{"name": "Certification Name", "url": "https://real-certification-url.com"}}
+  ],
   "roadmap": ["1. Step description", "2. Step description"]
 }}
 
 Rules:
-- courses: exactly 3, real and widely recognised, include the platform name
-- certifications: exactly 2-3, industry-recognised for this specific role
+- courses: exactly 3, real and widely recognised. Include platform name in the name. URL must be the real, direct course page URL.
+- certifications: exactly 2-3, industry-recognised for this specific role. URL must be the real official certification page.
 - roadmap: exactly 5 steps in logical learning sequence
+- All URLs must be real, publicly accessible, and directly relevant — no placeholder URLs.
 """
         response = self.client.models.generate_content(
             model="gemini-2.5-flash",
@@ -391,20 +401,20 @@ Rules:
             text = text[:-3]
         return json.loads(text.strip())
 
-    def _get_static(self, career_goal: str) -> Dict[str, List[str]]:
+    def _get_static(self, career_goal: str) -> Dict:
         goal_lower = career_goal.strip().lower()
         for key, recs in self.STATIC_FALLBACKS.items():
             if key in goal_lower:
                 return recs
         return {
             "courses": [
-                "CS50: Introduction to Computer Science — edX (Harvard, Free)",
-                "The Missing Semester of Your CS Education — MIT (Free)",
-                "System Design Primer — GitHub (Free)"
+                {"name": "CS50: Introduction to Computer Science — edX (Harvard, Free)", "url": "https://cs50.harvard.edu/x/"},
+                {"name": "The Missing Semester of Your CS Education — MIT (Free)", "url": "https://missing.csail.mit.edu/"},
+                {"name": "System Design Primer — GitHub (Free)", "url": "https://github.com/donnemartin/system-design-primer"},
             ],
             "certifications": [
-                "AWS Certified Cloud Practitioner",
-                "Google Associate Cloud Engineer"
+                {"name": "AWS Certified Cloud Practitioner", "url": "https://aws.amazon.com/certification/certified-cloud-practitioner/"},
+                {"name": "Google Associate Cloud Engineer", "url": "https://cloud.google.com/certification/cloud-engineer"},
             ],
             "roadmap": [
                 "1. Strengthen programming fundamentals in Python or Java",
@@ -422,8 +432,8 @@ Rules:
 
 class KnowledgeGapService:
     def __init__(self, gemini_client=None):
-        self.score_engine         = ReadinessScoreEngine()
-        self.skill_matcher        = SkillMatcher(self.score_engine)
+        self.score_engine          = ReadinessScoreEngine()
+        self.skill_matcher         = SkillMatcher(self.score_engine)
         self.recommendation_engine = RecommendationEngine(gemini_client)
 
     def analyze(self, request: KnowledgeGapRequest) -> KnowledgeGapResponse:
@@ -447,6 +457,15 @@ class KnowledgeGapService:
             missing_skills=missing_skills
         )
 
+        # 5. Normalise courses/certs — accept both {name,url} dicts and plain strings
+        def to_resource_link(item) -> ResourceLink:
+            if isinstance(item, dict):
+                return ResourceLink(name=item.get("name", ""), url=item.get("url", "#"))
+            return ResourceLink(name=str(item), url="#")
+
+        courses = [to_resource_link(c) for c in recommendations.get("courses", [])]
+        certs   = [to_resource_link(c) for c in recommendations.get("certifications", [])]
+
         return KnowledgeGapResponse(
             career_goal=request.career_goal,
             target_company=request.target_company,
@@ -454,7 +473,7 @@ class KnowledgeGapService:
             score_explanation=score_explanation,
             strong_skills=strong_skills,
             missing_skills=missing_skills,
-            recommended_courses=recommendations.get("courses", []),
-            recommended_certifications=recommendations.get("certifications", []),
-            learning_roadmap=recommendations.get("roadmap", [])
+            recommended_courses=courses,
+            recommended_certifications=certs,
+            learning_roadmap=recommendations.get("roadmap", []),
         )

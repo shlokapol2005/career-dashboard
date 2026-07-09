@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   CheckCircle2, AlertTriangle, BookOpen, Award, Map,
-  ChevronRight, TrendingUp, Brain, GraduationCap, Zap, Star
+  ChevronRight, TrendingUp, Brain, GraduationCap, Zap, Star, ExternalLink
 } from 'lucide-react';
 
 // ─── Animated SVG Score Ring ──────────────────────────────────────────────────
@@ -241,16 +241,21 @@ export default function ReadinessReport({ data }) {
             />
             <div className="resource-list">
               {recommended_courses.map((c, i) => {
-                const [name, ...rest] = c.split(' — ');
+                const name = typeof c === 'string' ? c : c.name;
+                const url  = typeof c === 'string' ? null : c.url;
+                const [courseName, ...rest] = name.split(' — ');
                 return (
-                  <div key={i} className="resource-row" style={{ animationDelay: `${i * 0.06}s` }}>
+                  <a key={i}
+                    href={url || '#'} target="_blank" rel="noopener noreferrer"
+                    className={`resource-row ${!url || url === '#' ? 'no-link' : ''}`}
+                    style={{ animationDelay: `${i * 0.06}s` }}>
                     <div className="res-num">{i + 1}</div>
                     <div className="res-body">
-                      <span className="res-name">{name}</span>
+                      <span className="res-name">{courseName}</span>
                       {rest.length > 0 && <span className="res-platform">{rest.join(' — ')}</span>}
                     </div>
-                    <ChevronRight size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                  </div>
+                    {url && url !== '#' && <ExternalLink size={15} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />}
+                  </a>
                 );
               })}
             </div>
@@ -268,12 +273,20 @@ export default function ReadinessReport({ data }) {
               count={recommended_certifications.length}
             />
             <div className="cert-list">
-              {recommended_certifications.map((c, i) => (
-                <div key={i} className="cert-row" style={{ animationDelay: `${i * 0.08}s` }}>
-                  <Star size={17} style={{ color: '#f59e0b', flexShrink: 0 }} />
-                  <span className="cert-name">{c}</span>
-                </div>
-              ))}
+              {recommended_certifications.map((c, i) => {
+                const name = typeof c === 'string' ? c : c.name;
+                const url  = typeof c === 'string' ? null : c.url;
+                return (
+                  <a key={i}
+                    href={url || '#'} target="_blank" rel="noopener noreferrer"
+                    className={`cert-row ${!url || url === '#' ? 'no-link' : ''}`}
+                    style={{ animationDelay: `${i * 0.08}s` }}>
+                    <Star size={17} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                    <span className="cert-name">{name}</span>
+                    {url && url !== '#' && <ExternalLink size={14} style={{ color: '#f59e0b', flexShrink: 0, marginLeft: 'auto' }} />}
+                  </a>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -373,8 +386,10 @@ export default function ReadinessReport({ data }) {
           display:flex; align-items:center; gap:14px; padding:14px 18px;
           background:rgba(255,255,255,.02); border:1px solid var(--border-color);
           border-radius:13px; transition:all .25s; animation:fadeUp .4s ease both;
+          text-decoration:none; color:inherit;
         }
-        .resource-row:hover { background:rgba(255,255,255,.05); border-color:#818cf8; transform:translateX(4px); }
+        .resource-row:not(.no-link):hover { background:rgba(255,255,255,.05); border-color:#818cf8; transform:translateX(4px); }
+        .no-link { cursor:default; }
         .res-num {
           width:30px; height:30px; border-radius:50%; flex-shrink:0;
           background:linear-gradient(135deg,#6366f1,#8b5cf6);
@@ -391,8 +406,9 @@ export default function ReadinessReport({ data }) {
           display:flex; align-items:center; gap:12px; padding:16px 20px;
           background:rgba(245,158,11,.04); border:1px solid rgba(245,158,11,.2);
           border-radius:13px; transition:all .25s; animation:fadeUp .4s ease both;
+          text-decoration:none; color:inherit;
         }
-        .cert-row:hover { background:rgba(245,158,11,.09); border-color:rgba(245,158,11,.4); transform:translateX(4px); }
+        .cert-row:not(.no-link):hover { background:rgba(245,158,11,.09); border-color:rgba(245,158,11,.4); transform:translateX(4px); }
         .cert-name { font-size:.9rem; font-weight:600; color:var(--text-primary); }
 
         /* Roadmap */

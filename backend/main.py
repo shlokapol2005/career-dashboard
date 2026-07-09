@@ -163,22 +163,28 @@ async def generate_quiz(request: QuizRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Quiz generation error: {str(e)}")
 
+import sqlite3
+from database import get_db_connection, init_db
+
+# Initialize database on startup
+init_db()
+
 @app.post("/api/auth/signup")
 async def signup(request: AuthRequest):
     try:
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        if request.username in users:
+        try:
+            cursor.execute(
+                'INSERT INTO users (username, password, skills) VALUES (?, ?, ?)',
+                (request.username, request.password, "[]")
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="Username already exists")
-            
-        users[request.username] = {
-            "password": request.password,
-            "skills": {}
-        }
-        
-        with open(USERS_DB_PATH, "w") as f:
-            json.dump(users, f)
+        finally:
+            conn.close()
             
         return {"status": "success", "username": request.username}
     except HTTPException:
@@ -189,10 +195,16 @@ async def signup(request: AuthRequest):
 @app.post("/api/auth/login")
 async def login(request: AuthRequest):
     try:
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT * FROM users WHERE username = ? AND password = ?',
+            (request.username, request.password)
+        )
+        user = cursor.fetchone()
+        conn.close()
             
-        if request.username not in users or users[request.username]["password"] != request.password:
+        if not user:
             raise HTTPException(status_code=401, detail="Invalid username or password")
             
         return {"status": "success", "username": request.username}
@@ -204,15 +216,19 @@ async def login(request: AuthRequest):
 @app.get("/api/skills")
 async def get_skills(username: str):
     try:
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT skills FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        conn.close()
             
-        if username not in users:
-            return {"skills": {}}
+        if not row or not row['skills']:
+            return {"skills": []}
             
-        current_skills = users[username].get("skills", {})
-        if isinstance(current_skills, list):
-            current_skills = {"General": current_skills}
+        try:
+            current_skills = json.loads(row['skills'])
+        except json.JSONDecodeError:
+            current_skills = []
             
         return {"skills": current_skills}
     except Exception as e:
@@ -254,107 +270,205 @@ async def career_analyze(
         raise HTTPException(status_code=500, detail=f"Career analysis error: {str(e)}")
 
 
-@app.post("/api/skills/update")
-async def update_skills(request: SkillUpdateRequest):
-    try:
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
-            
-        if request.username not in users:
-            raise HTTPException(status_code=404, detail="User not found")
-        user_data = users[request.username]
-        current_skills = user_data.get("skills", {})
-        if isinstance(current_skills, list):
-            current_skills = {"General": current_skills}
-            
-        topic_skills = set(current_skills.get(request.topic, []))
-        
-        for skill in request.skills:
-            topic_skills.add(skill)
-            
-        current_skills[request.topic] = list(topic_skills)
-        user_data["skills"] = current_skills
-        users[request.username] = user_data
-        
-        with open(USERS_DB_PATH, "w") as f:
-            json.dump(users, f)
-            
-        return {"status": "success", "skills": current_skills}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating skills: {str(e)}")
-
 # ──────────────────────────────────────────────────────────────────────────────
-# Knowledge Gap & Career Readiness Endpoints
+# Combined Full Career Analysis Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-@app.post("/api/career/readiness")
-async def analyze_knowledge_gap(request: KnowledgeGapRequest):
-    """
-    POST /api/career/readiness
-    Accepts skills extracted from resume + career goal.
-    Returns readiness score, strong/missing skills, courses, certs, roadmap.
-    Persists result to users.json under career_readiness key.
-    """
+@app.post("/api/career/full-analysis")
+async def career_full_analysis(
+    resume: UploadFile = File(...),
+    desired_role: str = Form(...),
+    target_company: str = Form(""),
+    username: str = Form(""),
+):
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or api_key == "your_api_key_here":
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured.")
+
     try:
+        # ── Step 1: Extract resume text
+        engine = RAGEngine(api_key=api_key)
+        content = await resume.read()
+        text = engine.extract_text(content, resume.filename, resume.content_type)
+
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from the resume. Please ensure it is not a scanned image."
+            )
+
+        # ── Step 2: Career analysis (skills + projects)
+        career_json_string = engine.analyze_career(text, desired_role)
+        try:
+            career_data = json.loads(career_json_string, strict=False)
+        except json.JSONDecodeError:
+            print("Failed to parse career JSON:", career_json_string)
+            raise HTTPException(status_code=500, detail="AI career response was not valid JSON.")
+
+        current_skills = career_data.get("currentSkills", [])
+        skills_to_learn = career_data.get("skillsToLearn", [])
+        projects = career_data.get("projects", [])
+
+        # ── Step 3: Knowledge gap analysis (score + courses + roadmap)
+        from knowledge_gap_service import KnowledgeGapRequest
         service = get_kg_service()
-        response = service.analyze(request)
-        result = response.model_dump()
+        kg_request = KnowledgeGapRequest(
+            username=username or "anonymous",
+            current_skills=current_skills,
+            career_goal=desired_role,
+            target_company=target_company.strip() or None,
+        )
+        kg_response = service.analyze(kg_request)
+        kg_data = kg_response.model_dump()
 
-        # Persist to users.json
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
+        # ── Step 4: Persist to SQLite if user is logged in
+        if username:
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    'UPDATE users SET career_goal = ?, skills = ? WHERE username = ?',
+                    (desired_role, json.dumps(current_skills), username)
+                )
+                conn.commit()
+                conn.close()
+            except Exception as persist_err:
+                print(f"[WARN] Could not persist career readiness to DB: {persist_err}")
 
-        if request.username not in users:
-            raise HTTPException(status_code=404, detail="User not found. Please log in first.")
-
-        users[request.username]["career_readiness"] = {
-            "career_goal": request.career_goal,
-            "target_company": request.target_company,
-            "current_skills": request.current_skills,
-            "analysis": result
+        # ── Step 5: Merge and return
+        return {
+            "status": "success",
+            "desiredRole": desired_role,
+            "targetCompany": target_company.strip() or None,
+            # From career analysis
+            "currentSkills": current_skills,
+            "skillsToLearn": skills_to_learn,
+            "projects": projects,
+            # From knowledge gap analysis
+            "readiness_score": kg_data["readiness_score"],
+            "score_explanation": kg_data["score_explanation"],
+            "strong_skills": kg_data["strong_skills"],
+            "missing_skills": kg_data["missing_skills"],
+            "recommended_courses": kg_data["recommended_courses"],
+            "recommended_certifications": kg_data["recommended_certifications"],
+            "learning_roadmap": kg_data["learning_roadmap"],
         }
-
-        with open(USERS_DB_PATH, "w") as f:
-            json.dump(users, f, indent=2)
-
-        return {"status": "success", **result}
 
     except HTTPException:
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Knowledge gap analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Full career analysis error: {str(e)}")
 
 
-@app.get("/api/career/readiness")
-async def get_knowledge_gap(username: str):
-    """
-    GET /api/career/readiness?username=<username>
-    Returns the user's last saved career readiness analysis.
-    """
+@app.post("/api/skills/update")
+async def update_skills(request: SkillUpdateRequest):
     try:
-        with open(USERS_DB_PATH, "r") as f:
-            users = json.load(f)
-
-        if username not in users:
-            raise HTTPException(status_code=404, detail="User not found.")
-
-        saved = users[username].get("career_readiness")
-        if not saved:
-            raise HTTPException(
-                status_code=404,
-                detail="No career readiness analysis found. Run an analysis first."
-            )
-
-        return {"status": "success", "data": saved}
-
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT skills FROM users WHERE username = ?', (request.username,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        current_skills = []
+        if row['skills']:
+            try:
+                current_skills = json.loads(row['skills'])
+            except:
+                pass
+                
+        # Simply append new skills (ensuring uniqueness)
+        skills_set = set(current_skills)
+        for s in request.skills:
+            skills_set.add(s)
+            
+        new_skills = list(skills_set)
+        
+        cursor.execute(
+            'UPDATE users SET skills = ? WHERE username = ?',
+            (json.dumps(new_skills), request.username)
+        )
+        conn.commit()
+        conn.close()
+            
+        return {"status": "success", "skills": new_skills}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching readiness data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating skills: {str(e)}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Notifications Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/notifications")
+async def get_notifications(username: str):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get user ID
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        # Get incoming notifications
+        cursor.execute(
+            'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC', 
+            (user['id'],)
+        )
+        incoming_rows = cursor.fetchall()
+        
+        # Get outgoing requests (where I am the sender, type=match_request)
+        cursor.execute(
+            'SELECT notifications.*, users.username as target_username FROM notifications JOIN users ON notifications.user_id = users.id WHERE sender_username = ? AND type = "match_request" ORDER BY created_at DESC', 
+            (username,)
+        )
+        outgoing_rows = cursor.fetchall()
+        
+        conn.close()
+        
+        incoming = [dict(r) for r in incoming_rows]
+        outgoing = [dict(r) for r in outgoing_rows]
+        
+        return {"status": "success", "incoming": incoming, "outgoing": outgoing}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class MarkReadRequest(BaseModel):
+    notification_id: int
+
+@app.post("/api/notifications/read")
+async def mark_notification_read(request: MarkReadRequest):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE notifications SET is_read = 1 WHERE id = ?',
+            (request.notification_id,)
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Matchmaking Endpoints placeholder
+# ──────────────────────────────────────────────────────────────────────────────
+from matchmaker import router as matchmaker_router
+app.include_router(matchmaker_router, prefix="/api/matchmaking")
 
 
 if __name__ == "__main__":
