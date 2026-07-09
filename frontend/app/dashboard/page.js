@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { BookOpen, Target, Users, Award, ChevronDown, ChevronRight, FolderTree, Bell, Check, X, Send } from 'lucide-react';
+import { BookOpen, Target, Users, Award, ChevronDown, ChevronRight, FolderTree, Bell, Check, X, Send, User, MessageSquare } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 
 // 3D Interactive Card Component
@@ -52,6 +52,11 @@ export default function DashboardPage() {
   const [skills, setSkills] = useState([]);
   const [incomingNotifs, setIncomingNotifs] = useState([]);
   const [outgoingNotifs, setOutgoingNotifs] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [discordInput, setDiscordInput] = useState('');
+  const [isUpdatingDiscord, setIsUpdatingDiscord] = useState(false);
+  const [creatingChannelId, setCreatingChannelId] = useState(null);
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -78,6 +83,21 @@ export default function DashboardPage() {
         }
       })
       .catch(err => console.error('Failed to fetch notifications:', err));
+
+    fetch(`http://localhost:5001/api/user/dashboard?username=${user.username}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.profile) {
+          setProfile(data.profile);
+          if (!discordInput && data.profile.discord_user_id) {
+            setDiscordInput(data.profile.discord_user_id);
+          }
+        }
+        if (data.teams) {
+          setTeams(data.teams);
+        }
+      })
+      .catch(err => console.error('Failed to fetch dashboard data:', err));
   };
 
   useEffect(() => { fetchDashboardData(); }, [user]);
@@ -102,6 +122,51 @@ export default function DashboardPage() {
       });
       fetchDashboardData();
     } catch (err) { console.error(err); }
+  };
+
+  const handleUpdateDiscord = async () => {
+    setIsUpdatingDiscord(true);
+    try {
+      const res = await fetch('http://localhost:5001/api/user/discord', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, discord_user_id: discordInput })
+      });
+      if (res.ok) {
+        fetchDashboardData();
+        alert("Discord User ID updated!");
+      } else {
+        const data = await res.json();
+        alert(data.detail || "Failed to update Discord ID.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error updating Discord ID.");
+    } finally {
+      setIsUpdatingDiscord(false);
+    }
+  };
+
+  const handleCreateTeamChannel = async (teamId) => {
+    setCreatingChannelId(teamId);
+    try {
+      const res = await fetch('http://localhost:5001/api/discord/create-team-channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team_id: teamId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchDashboardData();
+      } else {
+        alert(data.detail || "Failed to create channel.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error creating Discord channel.");
+    } finally {
+      setCreatingChannelId(null);
+    }
   };
 
   if (loading || !user) return null;
@@ -150,6 +215,81 @@ export default function DashboardPage() {
                   <span className="status-badge live">ONLINE</span>
                 </div>
               </TiltCard>
+            </div>
+
+            {/* Profile Settings & Hackathons */}
+            <div className="dashboard-sections-grid">
+              <section className="profile-section glass-panel">
+                <div className="section-head">
+                  <User size={20} className="text-gradient" />
+                  <h2>Profile Settings</h2>
+                </div>
+                <div className="profile-content">
+                  <div className="input-group">
+                    <label>Discord User ID</label>
+                    <div className="input-row">
+                      <input 
+                        type="text" 
+                        value={discordInput} 
+                        onChange={(e) => setDiscordInput(e.target.value)} 
+                        placeholder="e.g. 123456789012345678"
+                        className="discord-input"
+                      />
+                      <button 
+                        className="btn-update" 
+                        onClick={handleUpdateDiscord}
+                        disabled={isUpdatingDiscord}
+                      >
+                        {isUpdatingDiscord ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                    <p className="help-text">Your numeric Discord ID is required to be added to private hackathon channels.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="hackathons-section glass-panel">
+                <div className="section-head">
+                  <Target size={20} className="text-gradient" />
+                  <h2>Applied Hackathons</h2>
+                </div>
+                <div className="teams-list">
+                  {teams.length === 0 ? (
+                    <p className="no-data">You haven't joined any hackathon teams yet. Use the AI Matchmaker to find teammates!</p>
+                  ) : (
+                    teams.map(team => (
+                      <div key={team.id} className="team-card">
+                        <div className="team-header">
+                          <h3>{team.hackathon_name}</h3>
+                          {team.discord_channel_url ? (
+                            <a href={team.discord_channel_url} target="_blank" rel="noopener noreferrer" className="btn-discord-join">
+                              <MessageSquare size={14} /> Open Channel
+                            </a>
+                          ) : (
+                            <button 
+                              className="btn-discord-create" 
+                              onClick={() => handleCreateTeamChannel(team.id)}
+                              disabled={creatingChannelId === team.id}
+                            >
+                              <MessageSquare size={14} /> {creatingChannelId === team.id ? 'Creating...' : 'Create Server Channel'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="team-members">
+                          <span className="members-label">Team Members:</span>
+                          <div className="members-tags">
+                            {team.members.map((m, i) => (
+                              <span key={i} className="member-tag" title={m.discord_user_id ? "Discord linked" : "No Discord ID"}>
+                                @{m.username} {m.discord_user_id && <span className="discord-linked">✓</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
             </div>
           </div>
 
