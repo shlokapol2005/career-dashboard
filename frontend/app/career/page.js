@@ -9,7 +9,7 @@ import {
   TrendingUp, Brain, BookOpen, Award, Map, AlertTriangle,
   GraduationCap, Zap, Star, ExternalLink, RotateCcw
 } from 'lucide-react';
-import Navbar from '../../components/Navbar';
+
 
 // ── Level config for Projects tab ─────────────────────────────────────────────
 const LEVEL_CONFIG = {
@@ -146,7 +146,7 @@ export default function CareerPage() {
 
   return (
     <div className="page-wrapper">
-      <Navbar />
+
       <main className="container animate-fade-in">
 
       {/* Hero */}

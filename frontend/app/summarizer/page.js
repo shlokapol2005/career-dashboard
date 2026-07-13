@@ -4,7 +4,7 @@ import { Sparkles, Contrast, MessageSquare, X } from 'lucide-react';
 import UploadZone from '@/components/Summarizer/UploadZone';
 import ResultsDisplay from '@/components/Summarizer/ResultsDisplay';
 import Chatbot from '@/components/Summarizer/Chatbot';
-import Navbar from '@/components/Navbar';
+
 
 export default function SummarizerPage() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -67,7 +67,7 @@ export default function SummarizerPage() {
 
   return (
     <div className="page-wrapper">
-      <Navbar />
+
       <main className="container">
 
         {/* Theme Toggle */}

@@ -24,9 +24,18 @@ def init_db():
             password TEXT NOT NULL,
             career_goal TEXT,
             skills TEXT, -- Stored as JSON string
+            discord_user_id TEXT,  -- Discord numeric User ID (e.g. 123456789012345678)
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Migrate existing databases: add discord_user_id if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE users ADD COLUMN discord_user_id TEXT')
+        conn.commit()
+        print("[DB] Migrated: added discord_user_id column.")
+    except Exception:
+        pass  # Column already exists — safe to ignore
 
     # Create Notifications table (UPDATED WITH type and status)
     cursor.execute('''
@@ -43,6 +52,28 @@ def init_db():
         )
     ''')
     
+    # Create Teams table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hackathon_name TEXT NOT NULL,
+            discord_channel_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Create Team Members table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_members (
+            team_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (team_id, user_id),
+            FOREIGN KEY(team_id) REFERENCES teams(id),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ''')
+
     conn.commit()
     
     # Auto-seed if database is completely empty
@@ -66,8 +97,8 @@ def init_db():
         
         for u in dummy_users:
             cursor.execute(
-                'INSERT INTO users (username, password, career_goal, skills) VALUES (?, ?, ?, ?)',
-                (u['username'], u['password'], u['career_goal'], json.dumps(u['skills']))
+                'INSERT INTO users (username, password, career_goal, skills, discord_user_id) VALUES (?, ?, ?, ?, ?)',
+                (u['username'], u['password'], u['career_goal'], json.dumps(u['skills']), None)
             )
         conn.commit()
         print("[DB] 10 dummy users seeded successfully.")

@@ -66,6 +66,7 @@ class HintRequest(BaseModel):
 class AuthRequest(BaseModel):
     username: str
     password: str
+    discord_user_id: Optional[str] = None  # Provided only during signup
 
 class SkillUpdateRequest(BaseModel):
     username: str
@@ -208,6 +209,7 @@ Be encouraging and educational."""
 
 import sqlite3
 from database import get_db_connection, init_db
+from discord_service import create_team_channel
 
 # Initialize database on startup
 init_db()
@@ -217,18 +219,18 @@ async def signup(request: AuthRequest):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         try:
             cursor.execute(
-                'INSERT INTO users (username, password, skills) VALUES (?, ?, ?)',
-                (request.username, request.password, "[]")
+                'INSERT INTO users (username, password, skills, discord_user_id) VALUES (?, ?, ?, ?)',
+                (request.username, request.password, "[]", request.discord_user_id or None)
             )
             conn.commit()
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="Username already exists")
         finally:
             conn.close()
-            
+
         return {"status": "success", "username": request.username}
     except HTTPException:
         raise
@@ -246,15 +248,210 @@ async def login(request: AuthRequest):
         )
         user = cursor.fetchone()
         conn.close()
-            
+
         if not user:
             raise HTTPException(status_code=401, detail="Invalid username or password")
-            
-        return {"status": "success", "username": request.username}
+
+        return {
+            "status": "success",
+            "username": request.username,
+            "discord_user_id": user['discord_user_id'],
+        }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
+
+
+class UpdateDiscordRequest(BaseModel):
+    username: str
+    discord_user_id: str
+
+@app.get("/api/user/dashboard")
+async def get_user_dashboard(username: str):
+    """Return a user's profile, Discord ID, and teams they are part of."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Profile
+        cursor.execute(
+            'SELECT username, career_goal, skills, discord_user_id, created_at FROM users WHERE username = ?',
+            (username,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        try:
+            skills = json.loads(row['skills'] or "[]")
+        except Exception:
+            skills = []
+            
+        profile = {
+            "username": row['username'],
+            "career_goal": row['career_goal'],
+            "skills": skills,
+            "discord_user_id": row['discord_user_id'],
+            "created_at": row['created_at'],
+        }
+        
+        # Teams
+        cursor.execute('''
+            SELECT t.id, t.hackathon_name, t.discord_channel_url
+            FROM teams t
+            JOIN team_members tm ON t.id = tm.team_id
+            JOIN users u ON tm.user_id = u.id
+            WHERE u.username = ?
+        ''', (username,))
+        teams_rows = cursor.fetchall()
+        
+        teams = []
+        for t_row in teams_rows:
+            team_id = t_row['id']
+            # Get members for this team
+            cursor.execute('''
+                SELECT u.username, u.discord_user_id
+                FROM team_members tm
+                JOIN users u ON tm.user_id = u.id
+                WHERE tm.team_id = ?
+            ''', (team_id,))
+            members = [dict(m) for m in cursor.fetchall()]
+            
+            teams.append({
+                "id": team_id,
+                "hackathon_name": t_row['hackathon_name'],
+                "discord_channel_url": t_row['discord_channel_url'],
+                "members": members
+            })
+            
+        conn.close()
+        
+        return {
+            "profile": profile,
+            "teams": teams
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dashboard fetch error: {str(e)}")
+
+class CreateTeamChannelRequest(BaseModel):
+    team_id: int
+
+@app.post("/api/discord/create-team-channel")
+async def create_team_channel_endpoint(request: CreateTeamChannelRequest):
+    """Creates a Discord channel for all members of a given team."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verify team exists
+        cursor.execute('SELECT hackathon_name, discord_channel_url FROM teams WHERE id = ?', (request.team_id,))
+        team_row = cursor.fetchone()
+        
+        if not team_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Team not found")
+            
+        if team_row['discord_channel_url']:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Channel already created for this team")
+            
+        # Get team members and their discord IDs
+        cursor.execute('''
+            SELECT u.username, u.discord_user_id
+            FROM team_members tm
+            JOIN users u ON tm.user_id = u.id
+            WHERE tm.team_id = ?
+        ''', (request.team_id,))
+        members = [dict(m) for m in cursor.fetchall()]
+        
+        # Check if anyone has a discord ID
+        has_discord = any(m.get('discord_user_id') for m in members)
+        if not has_discord:
+            conn.close()
+            raise HTTPException(status_code=400, detail="No team members have a Discord User ID set")
+            
+        # Call discord service
+        discord_result = await create_team_channel(
+            hackathon_name=team_row['hackathon_name'],
+            team_members=members
+        )
+        
+        if not discord_result['success']:
+            conn.close()
+            raise HTTPException(status_code=500, detail=f"Discord API Error: {discord_result['error']}")
+            
+        channel_url = discord_result['channel_url']
+        
+        # Save channel URL
+        cursor.execute('UPDATE teams SET discord_channel_url = ? WHERE id = ?', (channel_url, request.team_id))
+        conn.commit()
+        conn.close()
+        
+        return {"status": "success", "discord_channel_url": channel_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Create team channel error: {str(e)}")
+
+@app.get("/api/user/profile")
+async def get_user_profile(username: str):
+    """Return a user's profile including their Discord User ID."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT username, career_goal, skills, discord_user_id, created_at FROM users WHERE username = ?',
+            (username,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        try:
+            skills = json.loads(row['skills'] or "[]")
+        except Exception:
+            skills = []
+
+        return {
+            "username": row['username'],
+            "career_goal": row['career_goal'],
+            "skills": skills,
+            "discord_user_id": row['discord_user_id'],
+            "created_at": row['created_at'],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Profile fetch error: {str(e)}")
+
+
+@app.patch("/api/user/discord")
+async def update_discord_id(request: UpdateDiscordRequest):
+    """Allow a user to set or update their Discord User ID at any time."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE users SET discord_user_id = ? WHERE username = ?',
+            (request.discord_user_id.strip() or None, request.username)
+        )
+        if cursor.rowcount == 0:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        conn.commit()
+        conn.close()
+        return {"status": "success", "discord_user_id": request.discord_user_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Discord update error: {str(e)}")
 
 @app.get("/api/skills")
 async def get_skills(username: str):

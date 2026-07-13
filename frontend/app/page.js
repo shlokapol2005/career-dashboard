@@ -31,7 +31,7 @@ const FEATURES = [
     icon: <Users size={28} />,
     gradient: 'linear-gradient(135deg, #10b981, #34d399)',
     glow: 'rgba(16,185,129,0.35)',
-    label: 'AI Matchmaker',
+    label: 'Hackathon Matchmaker',
     desc: 'Building a hackathon team? Let AI scout teammates with the exact complementary skills you need.',
     tags: ['Hackathon', 'Team Builder', 'Skill Match'],
     href: '/peer-matching',

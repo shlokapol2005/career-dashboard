@@ -18,6 +18,7 @@ class ConnectRequest(BaseModel):
     sender_username: str
     target_username: str
     message: str
+    hackathon_name: Optional[str] = None  # Used to name the Discord channel
 
 def get_gemini_client():
     api_key = os.getenv("GEMINI_API_KEY")
@@ -132,6 +133,33 @@ Return ONLY a valid JSON array of objects with this exact structure (no markdown
         raise HTTPException(status_code=500, detail=f"Failed to generate AI matches. {str(e)}")
 
 
+@router.get("/search-user")
+async def search_specific_user(username: str):
+    """Find a specific user by exact username to add them to the matchmaking results."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT username, career_goal, skills FROM users WHERE username = ?', (username,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    try:
+        skills = json.loads(row['skills'] or "[]")
+    except Exception:
+        skills = []
+        
+    member = {
+        "username": row["username"],
+        "role": "Manual Search",
+        "reason": "You searched for this user directly.",
+        "career_goal": row["career_goal"],
+        "skills": skills
+    }
+    return {"status": "success", "user": member}
+
 @router.post("/connect")
 async def connect_peer(request: ConnectRequest):
     conn = get_db_connection()
@@ -165,32 +193,82 @@ class RespondRequest(BaseModel):
 async def accept_peer(request: RespondRequest):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         # Get original notification
         cursor.execute('SELECT * FROM notifications WHERE id = ?', (request.notification_id,))
         notif = cursor.fetchone()
-        
+
         if not notif:
             raise HTTPException(status_code=404, detail="Notification not found.")
-            
+
         # Update original notification to accepted
         cursor.execute('UPDATE notifications SET status = ? WHERE id = ?', ('accepted', request.notification_id))
-        
-        # Get sender's user_id so we can notify them back
-        cursor.execute('SELECT id FROM users WHERE username = ?', (notif['sender_username'],))
+
+        # Get sender's user_id and discord info so we can notify them back
+        cursor.execute('SELECT id, discord_user_id FROM users WHERE username = ?', (notif['sender_username'],))
         original_sender = cursor.fetchone()
-        
+
+        # Get responder's user info
+        cursor.execute('SELECT id, discord_user_id FROM users WHERE username = ?', (request.responder_username,))
+        responder_row = cursor.fetchone()
+
+        # Extract hackathon name from the notification message if present
+        notif_message = notif['message'] or ""
+        hackathon_name = "hackathon"  # default fallback
+        import re
+        match = re.search(r'for\s+(.+?)\s*\.?$', notif_message, re.IGNORECASE)
+        if match:
+            hackathon_name = match.group(1).strip()
+
+        # ── Team Management ──────────────────────────────────────────
+        sender_id = original_sender['id'] if original_sender else None
+        responder_id = responder_row['id'] if responder_row else None
+
+        if sender_id and responder_id:
+            # Check if there is an existing team for this hackathon with either user
+            cursor.execute('''
+                SELECT t.id FROM teams t
+                JOIN team_members tm ON t.id = tm.team_id
+                WHERE t.hackathon_name = ? AND (tm.user_id = ? OR tm.user_id = ?)
+                LIMIT 1
+            ''', (hackathon_name, sender_id, responder_id))
+            existing_team = cursor.fetchone()
+
+            team_id = None
+            if existing_team:
+                team_id = existing_team['id']
+            else:
+                # Create a new team
+                cursor.execute('INSERT INTO teams (hackathon_name) VALUES (?)', (hackathon_name,))
+                team_id = cursor.lastrowid
+
+            # Add both users to the team (IGNORE if they are already in it)
+            try:
+                cursor.execute('INSERT OR IGNORE INTO team_members (team_id, user_id) VALUES (?, ?)', (team_id, sender_id))
+                cursor.execute('INSERT OR IGNORE INTO team_members (team_id, user_id) VALUES (?, ?)', (team_id, responder_id))
+            except Exception as e:
+                print(f"[Matchmaker] Error adding team members: {e}")
+        # ─────────────────────────────────────────────────────────────────────
+
         if original_sender:
-            msg = f"{request.responder_username} has accepted your hackathon team request! You are now connected."
+            msg = (
+                f"{request.responder_username} has accepted your hackathon team request! "
+                f"You are now connected for {hackathon_name}. Check your dashboard to create a team Discord channel."
+            )
             cursor.execute(
                 'INSERT INTO notifications (user_id, sender_username, message, type, status) VALUES (?, ?, ?, ?, ?)',
                 (original_sender['id'], request.responder_username, msg, 'match_accept', 'accepted')
             )
-            
+
         conn.commit()
         conn.close()
-        return {"status": "success"}
+        return {
+            "status": "success",
+        }
+    except HTTPException:
+        conn.close()
+        raise
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=str(e))
@@ -199,7 +277,7 @@ async def accept_peer(request: RespondRequest):
 async def decline_peer(request: RespondRequest):
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         # Update original notification to rejected
         cursor.execute('UPDATE notifications SET status = ? WHERE id = ?', ('rejected', request.notification_id))

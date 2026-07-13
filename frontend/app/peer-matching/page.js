@@ -8,7 +8,7 @@ import {
   CheckCircle2, Plus, ArrowRight, UserPlus, BrainCircuit,
   MessageSquare
 } from 'lucide-react';
-import Navbar from '../../components/Navbar';
+
 
 export default function PeerMatchingPage() {
   const { user, loading } = useAuth();
@@ -120,14 +120,14 @@ export default function PeerMatchingPage() {
 
   return (
     <div className="page-wrapper">
-      <Navbar />
+
       <main className="container animate-fade-in">
 
       {/* Hero */}
       <header className="pm-hero">
         <div className="badge">
           <Users size={16} className="text-gradient" />
-          <span>AI Matchmaker</span>
+          <span>Hackathon Matchmaker</span>
         </div>
         <h1 className="pm-title">
           Build Your <span className="text-gradient">Dream Team</span>

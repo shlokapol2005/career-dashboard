@@ -1,5 +1,6 @@
 import './globals.css';
 import { AuthProvider } from '../context/AuthContext';
+import LayoutWrapper from '../components/LayoutWrapper';
 
 export const metadata = {
   title: 'NEXUS HQ | AI-Powered Career Learning Platform',
@@ -14,7 +15,9 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <AuthProvider>
-          {children}
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
         </AuthProvider>
       </body>
     </html>
