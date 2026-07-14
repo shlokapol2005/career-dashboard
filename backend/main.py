@@ -13,8 +13,8 @@ if os.path.exists(env_path):
                 key, value = line.strip().split('=', 1)
                 os.environ[key] = value
 
-from rag import RAGEngine
-from knowledge_gap_service import KnowledgeGapService, KnowledgeGapRequest
+from rag import RAGEngine, extract_skills_from_resume
+from knowledge_gap_service import KnowledgeGapService, KnowledgeGapRequest, ReadinessScoreEngine
 
 app = FastAPI(title="AI Learning Engine API")
 
@@ -494,10 +494,13 @@ async def career_analyze(
                 detail="Could not extract text from the resume. Please ensure it is not a scanned image."
             )
 
-        json_string = engine.analyze_career(text, desired_role)
+        current_skills = extract_skills_from_resume(text)
+        json_string = engine.analyze_career(text, desired_role, current_skills)
 
         try:
-            return json.loads(json_string, strict=False)
+            data = json.loads(json_string, strict=False)
+            data["currentSkills"] = current_skills
+            return data
         except json.JSONDecodeError:
             print("Failed to parse career JSON:", json_string)
             raise HTTPException(status_code=500, detail="AI response was not valid JSON.")
@@ -537,31 +540,50 @@ async def career_full_analysis(
                 detail="Could not extract text from the resume. Please ensure it is not a scanned image."
             )
 
-        # ── Step 2: Career analysis (skills + projects)
-        career_json_string = engine.analyze_career(text, desired_role)
+        # ── Step 2: "You have" — parsed directly from the resume's own
+        # Skills/Tech Stack section (deterministic, no AI inference).
+        current_skills = extract_skills_from_resume(text)
+
+        # ── Step 3: "You need" + readiness score + projects — Gemini,
+        # anchored to the exact skill list from Step 2 (not re-extracting skills).
+        career_json_string = engine.analyze_career(text, desired_role, current_skills)
         try:
             career_data = json.loads(career_json_string, strict=False)
         except json.JSONDecodeError:
             print("Failed to parse career JSON:", career_json_string)
             raise HTTPException(status_code=500, detail="AI career response was not valid JSON.")
 
-        current_skills = career_data.get("currentSkills", [])
         skills_to_learn = career_data.get("skillsToLearn", [])
+        readiness_score = career_data.get("readinessScore")
+        score_explanation = career_data.get("scoreExplanation")
         projects = career_data.get("projects", [])
 
-        # ── Step 3: Knowledge gap analysis (score + courses + roadmap)
-        from knowledge_gap_service import KnowledgeGapRequest
+        # Fallback to the static engine's score only if Gemini didn't return a usable one
+        if not isinstance(readiness_score, (int, float)) or isinstance(readiness_score, bool):
+            score_engine = ReadinessScoreEngine()
+            core, elective = score_engine.get_required_skills(desired_role)
+            readiness_score, score_explanation = score_engine.calculate(current_skills, core, elective)
+        else:
+            readiness_score = max(0, min(100, int(readiness_score)))
+
+        # ── Step 4: Courses / certs / roadmap, based on the same skillsToLearn shown as "You need"
         service = get_kg_service()
-        kg_request = KnowledgeGapRequest(
-            username=username or "anonymous",
-            current_skills=current_skills,
+        recommendations = service.recommendation_engine.get_recommendations(
             career_goal=desired_role,
             target_company=target_company.strip() or None,
+            missing_skills=skills_to_learn,
         )
-        kg_response = service.analyze(kg_request)
-        kg_data = kg_response.model_dump()
 
-        # ── Step 4: Persist to SQLite if user is logged in
+        def _to_resource(item):
+            if isinstance(item, dict):
+                return {"name": item.get("name", ""), "url": item.get("url", "#")}
+            return {"name": str(item), "url": "#"}
+
+        recommended_courses = [_to_resource(c) for c in recommendations.get("courses", [])]
+        recommended_certifications = [_to_resource(c) for c in recommendations.get("certifications", [])]
+        learning_roadmap = recommendations.get("roadmap", [])
+
+        # ── Step 5: Persist to SQLite if user is logged in
         if username:
             try:
                 conn = get_db_connection()
@@ -575,23 +597,19 @@ async def career_full_analysis(
             except Exception as persist_err:
                 print(f"[WARN] Could not persist career readiness to DB: {persist_err}")
 
-        # ── Step 5: Merge and return
+        # ── Step 6: Merge and return
         return {
             "status": "success",
             "desiredRole": desired_role,
             "targetCompany": target_company.strip() or None,
-            # From career analysis
-            "currentSkills": current_skills,
-            "skillsToLearn": skills_to_learn,
+            "strong_skills": current_skills,   # "You have" — parsed from the resume's Skills section
+            "missing_skills": skills_to_learn, # "You need" — gap for the desired role
             "projects": projects,
-            # From knowledge gap analysis
-            "readiness_score": kg_data["readiness_score"],
-            "score_explanation": kg_data["score_explanation"],
-            "strong_skills": kg_data["strong_skills"],
-            "missing_skills": kg_data["missing_skills"],
-            "recommended_courses": kg_data["recommended_courses"],
-            "recommended_certifications": kg_data["recommended_certifications"],
-            "learning_roadmap": kg_data["learning_roadmap"],
+            "readiness_score": readiness_score,
+            "score_explanation": score_explanation,
+            "recommended_courses": recommended_courses,
+            "recommended_certifications": recommended_certifications,
+            "learning_roadmap": learning_roadmap,
         }
 
     except HTTPException:

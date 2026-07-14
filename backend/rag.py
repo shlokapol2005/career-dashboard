@@ -1,4 +1,5 @@
 import os
+import re
 import faiss
 import numpy as np
 import fitz
@@ -10,6 +11,96 @@ from google.genai import types
 
 # AQ.* API keys require v1beta endpoint for gemini-2.5-flash
 GENAI_HTTP_OPTIONS = {"api_version": "v1beta"}
+
+
+# ──────────────────────────────────────────────
+# Deterministic skill extraction — reads the resume's own
+# "Skills" / "Tech Stack" section instead of asking an LLM to infer skills.
+# ──────────────────────────────────────────────
+SKILL_SECTION_HEADERS = {
+    "technical skills", "skills and tools", "skills & tools", "tech stack",
+    "technologies", "core competencies", "key skills", "skill set", "skills",
+    "tools & technologies", "tools and technologies", "technical skillset",
+    "technical expertise", "areas of expertise",
+}
+
+SECTION_STOP_HEADERS = {
+    "experience", "work experience", "professional experience", "employment",
+    "employment history", "education", "projects", "project experience",
+    "certifications", "certificates", "achievements", "awards", "publications",
+    "extracurricular", "extracurriculars", "activities", "summary", "objective",
+    "profile", "contact", "references", "internship", "internships",
+    "leadership", "volunteer", "volunteering", "languages", "interests",
+    "hobbies", "about", "about me", "personal projects",
+}
+
+_SPLIT_RE = re.compile(r'[,|;•·•]+')
+_HEADING_SPLIT_RE = re.compile(r'\s*&\s*|\s+and\s+')
+
+
+def _normalize_heading(line: str) -> str:
+    return re.sub(r'[^a-z& ]', '', line.strip().lower()).strip()
+
+
+def _heading_parts(line: str) -> list[str]:
+    """Return normalized heading fragments if this line looks like a standalone
+    section heading (short, no ':' content) — else []. Splits combined
+    headings like 'Achievements & Certifications' into individual parts so
+    each can be checked against the keyword sets."""
+    if ':' in line:
+        return []
+    norm = _normalize_heading(line)
+    if not norm or len(norm) > 40:
+        return []
+    words = norm.split()
+    if len(words) > 6:
+        return []
+    parts = [p.strip() for p in _HEADING_SPLIT_RE.split(norm) if p.strip()]
+    return parts or [norm]
+
+
+def _matches_heading(line: str, keywords: set) -> bool:
+    return any(part in keywords for part in _heading_parts(line))
+
+
+def extract_skills_from_resume(resume_text: str) -> list[str]:
+    """Parse the literal Skills / Tech Stack section of a resume.
+    Returns [] if no such heading is found."""
+    lines = resume_text.splitlines()
+    n = len(lines)
+
+    start_idx = None
+    for i, line in enumerate(lines):
+        if _matches_heading(line, SKILL_SECTION_HEADERS):
+            start_idx = i + 1
+            break
+    if start_idx is None:
+        return []
+
+    end_idx = n
+    for j in range(start_idx, n):
+        if _matches_heading(lines[j], SECTION_STOP_HEADERS):
+            end_idx = j
+            break
+
+    skills: list[str] = []
+    seen = set()
+    for line in lines[start_idx:end_idx]:
+        line = line.strip()
+        if not line:
+            continue
+        if ':' in line:
+            line = line.split(':', 1)[1]
+        for tok in _SPLIT_RE.split(line):
+            tok = re.sub(r'\s+', ' ', tok.strip(' -\t')).strip()
+            if not tok or len(tok) > 50:
+                continue
+            key = tok.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            skills.append(tok)
+    return skills
 
 
 # ──────────────────────────────────────────────
@@ -299,19 +390,24 @@ Respond ONLY with a valid JSON object in exactly this format (no markdown, no ex
 
         return text_out.strip()
 
-    # ── Step 6: Career Analysis (Resume → Skills + Projects) ──
-    def analyze_career(self, resume_text: str, desired_role: str) -> str:
-        """Analyze a resume against a desired role.
-        Returns JSON with currentSkills, skillsToLearn, and categorized projects."""
+    # ── Step 6: Career Analysis (Resume → Gaps + Projects) ──
+    def analyze_career(self, resume_text: str, desired_role: str, current_skills: list[str]) -> str:
+        """Analyze a resume against a desired role, given a skill list already
+        extracted deterministically from the resume's Skills/Tech Stack section.
+        Returns JSON with skillsToLearn, readinessScore, and categorized projects."""
 
         context = resume_text[:400000]
+        skills_str = ", ".join(current_skills) if current_skills else "(none listed)"
 
         prompt = f"""
 You are an expert career coach and technical hiring manager. A candidate has uploaded their resume and wants to become a "{desired_role}".
 
-Your task:
-1. Extract every technical and professional skill already present in the resume.
-2. Identify the skills that a strong "{desired_role}" must have that are NOT currently on this resume.
+The candidate's current skills, extracted directly from the Skills/Tech Stack section of their resume, are:
+{skills_str}
+
+Using the full resume below only for extra context, your task:
+1. Identify the skills that a strong "{desired_role}" must have that are NOT in the candidate's current skills list above.
+2. Score the candidate's overall readiness for the "{desired_role}" role on a 0-100 scale, based on how many of the critical, role-defining skills are already present (from the current skills list above) versus missing. Be realistic and strict — a candidate missing core fundamentals for the role (e.g. no data structures/algorithms for an SDE role) should score low even if they have many unrelated skills.
 3. Suggest 9 hands-on projects (3 beginner, 3 intermediate, 3 advanced) that will help build the missing skills and significantly strengthen the resume for this role.
 
 Resume:
@@ -322,12 +418,11 @@ Resume:
 Respond ONLY with a valid JSON object in exactly this format (no markdown, no extra text):
 {{
   "desiredRole": "{desired_role}",
-  "currentSkills": [
-    "Skill already on resume"
-  ],
   "skillsToLearn": [
     "Missing skill needed for the role"
   ],
+  "readinessScore": 0,
+  "scoreExplanation": "1-2 sentence honest explanation of the score, naming specific strong areas and specific critical gaps.",
   "projects": [
     {{
       "level": "beginner",
@@ -358,6 +453,7 @@ Respond ONLY with a valid JSON object in exactly this format (no markdown, no ex
 
 Include exactly 3 beginner, 3 intermediate, and 3 advanced projects in the projects array.
 For githubRepo, provide ONLY the URL (starting with https://github.com/) with no extra text or description after it.
+"readinessScore" must be a plain integer between 0 and 100 (no quotes, no % sign).
 """
         try:
             result = self.client.models.generate_content(

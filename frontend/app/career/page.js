@@ -5,9 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Sparkles, UploadCloud, FileText, Loader2,
   AlertCircle, CheckCircle2, Target, Layers, Hammer,
-  ChevronRight, Lightbulb, BookMarked, Rocket, Building2,
+  ChevronRight, Lightbulb, Rocket, Building2,
   TrendingUp, Brain, BookOpen, Award, Map, AlertTriangle,
-  GraduationCap, Zap, Star, ExternalLink, RotateCcw
+  GraduationCap, Star, ExternalLink, RotateCcw
 } from 'lucide-react';
 
 
@@ -333,7 +333,7 @@ export default function CareerPage() {
                   </div>
                 ))}
               </div>
-              {/* Quick Skill Preview */}
+              {/* Skill Preview */}
               {(results.strong_skills?.length > 0 || results.missing_skills?.length > 0) && (
                 <div className="quick-preview-row">
                   {results.strong_skills?.length > 0 && (
@@ -342,8 +342,7 @@ export default function CareerPage() {
                         <CheckCircle2 size={13} /> You have
                       </div>
                       <div className="chip-group">
-                        {results.strong_skills.slice(0, 8).map((s, i) => <span key={i} className="skill-chip skill-strong">{s}</span>)}
-                        {results.strong_skills.length > 8 && <span className="chip-more">+{results.strong_skills.length - 8}</span>}
+                        {results.strong_skills.map((s, i) => <span key={i} className="skill-chip skill-strong">{s}</span>)}
                       </div>
                     </div>
                   )}
@@ -353,8 +352,7 @@ export default function CareerPage() {
                         <AlertTriangle size={13} /> You need
                       </div>
                       <div className="chip-group">
-                        {results.missing_skills.slice(0, 8).map((s, i) => <span key={i} className="skill-chip skill-missing">{s}</span>)}
-                        {results.missing_skills.length > 8 && <span className="chip-more">+{results.missing_skills.length - 8}</span>}
+                        {results.missing_skills.map((s, i) => <span key={i} className="skill-chip skill-missing">{s}</span>)}
                       </div>
                     </div>
                   )}
@@ -363,84 +361,11 @@ export default function CareerPage() {
             </div>
           </div>
 
-          {/* ── SECTION 2: Skills Analysis ─────────────────────────────────── */}
+          {/* ── SECTION 2: Recommended Projects ────────────────────────────── */}
           <div className="section-block">
             <div className="section-header">
               <div className="section-header-left">
                 <div className="section-num">02</div>
-                <div>
-                  <h2 className="section-title">Skills Analysis</h2>
-                  <p className="section-desc">A breakdown of your existing skills vs. what the role demands</p>
-                </div>
-              </div>
-            </div>
-            <div className="two-col">
-              <div className="glass-panel pad-panel">
-                <div className="sec-hdr">
-                  <CheckCircle2 size={20} style={{ color: '#10b981' }} />
-                  <div>
-                    <h3 className="sec-title">Current Skills</h3>
-                    <p className="sec-sub">Extracted from your resume</p>
-                  </div>
-                  <span className="sec-badge green-badge">{results.currentSkills?.length || 0}</span>
-                </div>
-                <div className="chip-group">
-                  {(results.currentSkills || []).map((s, i) => <span key={i} className="skill-chip skill-current">{s}</span>)}
-                </div>
-              </div>
-              <div className="glass-panel pad-panel">
-                <div className="sec-hdr">
-                  <BookMarked size={20} style={{ color: '#f59e0b' }} />
-                  <div>
-                    <h3 className="sec-title">Skills to Learn</h3>
-                    <p className="sec-sub">Needed for {results.desiredRole}</p>
-                  </div>
-                  <span className="sec-badge yellow-badge">{results.skillsToLearn?.length || 0}</span>
-                </div>
-                <div className="chip-group">
-                  {(results.skillsToLearn || []).map((s, i) => <span key={i} className="skill-chip skill-learn">{s}</span>)}
-                </div>
-              </div>
-            </div>
-            <div className="two-col" style={{ marginTop: 16 }}>
-              <div className="glass-panel pad-panel">
-                <div className="sec-hdr">
-                  <Zap size={20} style={{ color: '#10b981' }} />
-                  <div>
-                    <h3 className="sec-title">Role-Matched Strengths</h3>
-                    <p className="sec-sub">Validated against the {results.desiredRole} framework</p>
-                  </div>
-                  <span className="sec-badge green-badge">{results.strong_skills?.length || 0}</span>
-                </div>
-                <div className="chip-group">
-                  {(results.strong_skills || []).length > 0
-                    ? results.strong_skills.map((s, i) => <span key={i} className="skill-chip skill-strong">{s}</span>)
-                    : <p className="empty-note">No role-specific matches found yet.</p>}
-                </div>
-              </div>
-              <div className="glass-panel pad-panel">
-                <div className="sec-hdr">
-                  <AlertTriangle size={20} style={{ color: '#ef4444' }} />
-                  <div>
-                    <h3 className="sec-title">Critical Skill Gaps</h3>
-                    <p className="sec-sub">Core gaps to close for this role</p>
-                  </div>
-                  <span className="sec-badge red-badge">{results.missing_skills?.length || 0}</span>
-                </div>
-                <div className="chip-group">
-                  {(results.missing_skills || []).length > 0
-                    ? results.missing_skills.map((s, i) => <span key={i} className="skill-chip skill-missing">{s}</span>)
-                    : <p className="empty-note">You have all required skills! 🎉</p>}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── SECTION 3: Recommended Projects ────────────────────────────── */}
-          <div className="section-block">
-            <div className="section-header">
-              <div className="section-header-left">
-                <div className="section-num">03</div>
                 <div>
                   <h2 className="section-title">Recommended Projects</h2>
                   <p className="section-desc">Hands-on projects to close your skill gaps and strengthen your resume</p>
@@ -507,11 +432,11 @@ export default function CareerPage() {
             </div>
           </div>
 
-          {/* ── SECTION 4: Courses & Certifications ────────────────────────── */}
+          {/* ── SECTION 3: Courses & Certifications ────────────────────────── */}
           <div className="section-block">
             <div className="section-header">
               <div className="section-header-left">
-                <div className="section-num">04</div>
+                <div className="section-num">03</div>
                 <div>
                   <h2 className="section-title">Courses & Certifications</h2>
                   <p className="section-desc">Curated resources to accelerate your learning path</p>
@@ -576,11 +501,11 @@ export default function CareerPage() {
             </div>
           </div>
 
-          {/* ── SECTION 5: Learning Roadmap ─────────────────────────────────── */}
+          {/* ── SECTION 4: Learning Roadmap ─────────────────────────────────── */}
           <div className="section-block">
             <div className="section-header">
               <div className="section-header-left">
-                <div className="section-num">05</div>
+                <div className="section-num">04</div>
                 <div>
                   <h2 className="section-title">Learning Roadmap</h2>
                   <p className="section-desc">A step-by-step guide to close your knowledge gaps for {results.desiredRole}</p>
@@ -828,15 +753,8 @@ export default function CareerPage() {
           font-weight: 500; border: 1px solid; transition: transform .15s, box-shadow .15s;
         }
         .skill-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-        .skill-current { background: var(--accent-light);   color: var(--accent-color); border-color: rgba(139,92,246,.25); }
-        .skill-learn   { background: var(--warning-light);  color: #d97706; border-color: rgba(245,158,11,.3); }
         .skill-strong  { background: var(--success-light);  color: #059669; border-color: rgba(16,185,129,.3); }
         .skill-missing { background: var(--error-light);    color: #dc2626; border-color: rgba(239,68,68,.3); }
-        .chip-more {
-          padding: 4px 10px; border-radius: 7px; font-size: .74rem; font-weight: 600;
-          color: var(--text-muted); border: 1px solid var(--border-color);
-          background: var(--bg-hover);
-        }
         .empty-note { color: var(--text-muted); font-size: .86rem; margin: 0; font-style: italic; }
 
         /* Projects */
